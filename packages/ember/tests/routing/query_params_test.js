@@ -129,6 +129,8 @@ if (Ember.FEATURES.isEnabled("query-params-new")) {
     equal(router.get('location.path'), "/?foo=987");
   });
 
+  // As I understand it this isn't the desired behavior anymore. If the a default value is
+  // provided in the controller then no query param will be added to the url. 
   test("A replaceURL occurs on startup if QP values aren't already in sync", function() {
     expect(1);
 
@@ -396,7 +398,7 @@ if (Ember.FEATURES.isEnabled("query-params-new")) {
     equal(router.get('location.path'), "/?appomg=appyes&omg=yes");
   });
 
-  test("can opt into full transition in response to QP change by calling refresh() inside queryParamsDidChange action", function() {
+  test("can opt into full transition by overriding reresh in route queryParams", function() {
     expect(6);
     App.ApplicationController = Ember.Controller.extend({
       queryParams: ['appomg'],
@@ -417,6 +419,11 @@ if (Ember.FEATURES.isEnabled("query-params-new")) {
 
     var indexModelCount = 0;
     App.IndexRoute = Ember.Route.extend({
+      queryParams: {
+        omg: {
+          refreshModel: true
+        }
+      },
       model: function(params) {
         indexModelCount++;
 
@@ -424,11 +431,6 @@ if (Ember.FEATURES.isEnabled("query-params-new")) {
           deepEqual(params, { omg: 'lol' });
         } else if (indexModelCount === 2) {
           deepEqual(params, { omg: 'lex' });
-        }
-      },
-      actions: {
-        queryParamsDidChange: function() {
-          this.refresh();
         }
       }
     });
@@ -547,17 +549,20 @@ if (Ember.FEATURES.isEnabled("query-params-new")) {
     Ember.run(router, 'transitionTo', { queryParams: { foo: '' } });
   });
 
-  test("Query param without =value are boolean", function() {
+  test("Boolean query params are explicitly represented with 'true' and 'false'", function() {
     App.IndexController = Ember.Controller.extend({
       queryParams: ['foo'],
       foo: false
     });
 
-    startingURL = "/?foo";
+    startingURL = "/?foo=true";
     bootApplication();
 
     var controller = container.lookup('controller:index');
     equal(controller.get('foo'), true);
+
+    handleUrl('/?foo=false');
+    equal(controller.get('foo'), false);
   });
 
   test("Query param without value are empty string", function() {
@@ -614,6 +619,9 @@ if (Ember.FEATURES.isEnabled("query-params-new")) {
     equal(router.get('location.path'), "/", "longform supported");
   });
 
+  // Not sure how this test gets affected?
+  // foo: '' as default values makes the type a string.
+  // but I don't think you would translate from an array => string
   test("Url with array query param sets controller property to array", function() {
     App.IndexController = Ember.Controller.extend({
       queryParams: ['foo'],
@@ -651,6 +659,8 @@ if (Ember.FEATURES.isEnabled("query-params-new")) {
     equal(router.get('location.path'), "/?foo[]=lol&foo[]=1");
   });
 
+  // This test seems like it contridcts the inferring the type of a query param
+  // fromt he default value provided.
   test("Can swap out qp props as strings, arrays, back and forth", function() {
     Router.map(function() {
       this.route("home", { path: '/' });
@@ -678,16 +688,16 @@ if (Ember.FEATURES.isEnabled("query-params-new")) {
   });
 
   test("Overwriting with array with same content shouldn't refire update", function() {
-    expect(1);
+    expect(2);
+    var modelCount = 0;
+    
     Router.map(function() {
       this.route("home", { path: '/' });
     });
 
     App.HomeRoute = Ember.Route.extend({
-      actions: {
-        queryParamsDidChange: function() {
-          ok(false, "queryParamsDidChange shouldn't have been called");
-        }
+      model: function() {
+        modelCount++;
       }
     });
 
@@ -698,8 +708,10 @@ if (Ember.FEATURES.isEnabled("query-params-new")) {
 
     bootApplication();
 
+    equal(modelCount, 1);
     var controller = container.lookup('controller:home');
     Ember.run(controller, 'set', Ember.A([1]));
+    equal(modelCount, 1);
     equal(router.get('location.path'), "/?foo[]=1");
   });
 
